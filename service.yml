@@ -2,7 +2,6 @@ name: mongodb
 icon: mongodb
 type: database
 title: MongoDB
-hostname: mongodb
 containers:
 - name: mongodb
   image: bitnami/mongodb
