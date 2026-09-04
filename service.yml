@@ -1,71 +1,303 @@
 name: mongodb
 icon: mongodb
-type: database
+type: db
 title: MongoDB
-containers:
-- name: mongodb
-  image: bitnami/mongodb
-  env:
-  - name: DISABLE_WELCOME_MESSAGE
-    value: 'true'    
+
 options:
-- version: '7.0'
-  tag: 7.0.14-debian-12-r3
+- version: '8.0'
+  tag: 8.0.29-noble
+  eol: '2029-10-31T00:00:00+00:00'
+  default: true
+
 endpoints:
 - name: mongodb
   ports:
   - name: mongodb
     number: 27017
-    type: tcp
+    protocol: tcp
+
+scalable: false
+
 labels:
+- mongo
 - mongodb
 
 volumes:
 - name: data
   title: Data
-  optional: true
-  helm: 
+  size: 10
+  helm:
     values:
     - name: persistence.enabled
       value: true
     - name: persistence.size
       value: '{{volumes.data.size}}Gi'
-    # mandatory to use existing claim since this volume will have import function
-    # we will mount different claim after import and doing it through sts's volumeclaimtemplates is not supported
     - name: persistence.existingClaim
       value: '{{volumes.data.claim}}'
-
-tokens:
-- name: password
-  generate:
-    regex: '[0-9a-z-]{32}'
 
 database:
   type: mongodb
   kind: mongodb
   port: 27017
-  ssl: true
+  ssl: false
   root:
     username: root
-    password: '{{password}}'    
+    password: '{{root_password}}'
+  db:
+    name: '{{app.name}}_{{instance.name}}'
+    charset: UTF8
+    collation: simple
+    actions:
+      create:
+        args:
+        - bash
+        - -ec
+        - |
+          export WODBY_DATABASE_NAME="$2"
+          exec mongosh --quiet \
+            --host "$1" \
+            --port 27017 \
+            --username "$MONGO_INITDB_ROOT_USERNAME" \
+            --password "$MONGO_INITDB_ROOT_PASSWORD" \
+            --authenticationDatabase admin \
+            --eval 'const target = db.getSiblingDB(process.env.WODBY_DATABASE_NAME); if (!target.getCollectionNames().includes("__wodby")) { target.createCollection("__wodby"); }'
+        - wodby-create-db
+        - '{{database.host}}'
+        - '{{database.db.name}}'
+      drop:
+        args:
+        - bash
+        - -ec
+        - |
+          export WODBY_DATABASE_NAME="$2"
+          exec mongosh --quiet \
+            --host "$1" \
+            --port 27017 \
+            --username "$MONGO_INITDB_ROOT_USERNAME" \
+            --password "$MONGO_INITDB_ROOT_PASSWORD" \
+            --authenticationDatabase admin \
+            --eval 'db.getSiblingDB(process.env.WODBY_DATABASE_NAME).dropDatabase();'
+        - wodby-drop-db
+        - '{{database.host}}'
+        - '{{database.db.name}}'
+  user:
+    name: '{{app.name}}_{{instance.name}}'
+    password: '{{password}}'
+    actions:
+      create:
+        args:
+        - bash
+        - -ec
+        - |
+          export WODBY_DATABASE_USER_NAME="$2"
+          export WODBY_DATABASE_USER_PASSWORD="$3"
+          exec mongosh --quiet \
+            --host "$1" \
+            --port 27017 \
+            --username "$MONGO_INITDB_ROOT_USERNAME" \
+            --password "$MONGO_INITDB_ROOT_PASSWORD" \
+            --authenticationDatabase admin \
+            --eval 'const admin = db.getSiblingDB("admin"); const name = process.env.WODBY_DATABASE_USER_NAME; const password = process.env.WODBY_DATABASE_USER_PASSWORD; if (admin.getUser(name)) { admin.updateUser(name, {pwd: password}); } else { admin.createUser({user: name, pwd: password, roles: []}); }'
+        - wodby-create-user
+        - '{{database.host}}'
+        - '{{database.user.name}}'
+        - '{{database.user.password}}'
+      drop:
+        args:
+        - bash
+        - -ec
+        - |
+          export WODBY_DATABASE_USER_NAME="$2"
+          exec mongosh --quiet \
+            --host "$1" \
+            --port 27017 \
+            --username "$MONGO_INITDB_ROOT_USERNAME" \
+            --password "$MONGO_INITDB_ROOT_PASSWORD" \
+            --authenticationDatabase admin \
+            --eval 'const admin = db.getSiblingDB("admin"); const name = process.env.WODBY_DATABASE_USER_NAME; if (admin.getUser(name)) { admin.dropUser(name); }'
+        - wodby-drop-user
+        - '{{database.host}}'
+        - '{{database.user.name}}'
+      grant:
+        args:
+        - bash
+        - -ec
+        - |
+          export WODBY_DATABASE_USER_NAME="$2"
+          export WODBY_DATABASE_NAME="$3"
+          exec mongosh --quiet \
+            --host "$1" \
+            --port 27017 \
+            --username "$MONGO_INITDB_ROOT_USERNAME" \
+            --password "$MONGO_INITDB_ROOT_PASSWORD" \
+            --authenticationDatabase admin \
+            --eval 'const admin = db.getSiblingDB("admin"); const name = process.env.WODBY_DATABASE_USER_NAME; const database = process.env.WODBY_DATABASE_NAME; const user = admin.getUser(name); if (!user) { throw new Error(`MongoDB user ${name} does not exist`); } if (!user.roles.some((role) => role.role === "readWrite" && role.db === database)) { admin.grantRolesToUser(name, [{role: "readWrite", db: database}]); }'
+        - wodby-grant-user
+        - '{{database.host}}'
+        - '{{database.user.name}}'
+        - '{{database.db.name}}'
+      revoke:
+        args:
+        - bash
+        - -ec
+        - |
+          export WODBY_DATABASE_USER_NAME="$2"
+          export WODBY_DATABASE_NAME="$3"
+          exec mongosh --quiet \
+            --host "$1" \
+            --port 27017 \
+            --username "$MONGO_INITDB_ROOT_USERNAME" \
+            --password "$MONGO_INITDB_ROOT_PASSWORD" \
+            --authenticationDatabase admin \
+            --eval 'const admin = db.getSiblingDB("admin"); const name = process.env.WODBY_DATABASE_USER_NAME; const database = process.env.WODBY_DATABASE_NAME; const user = admin.getUser(name); if (user && user.roles.some((role) => role.role === "readWrite" && role.db === database)) { admin.revokeRolesFromUser(name, [{role: "readWrite", db: database}]); }'
+        - wodby-revoke-user
+        - '{{database.host}}'
+        - '{{database.user.name}}'
+        - '{{database.db.name}}'
+  charsets:
+  - name: UTF8
+    title: UTF-8
+    collation: simple
+    default: true
+
+imports:
+- name: database
+  title: Database import
+  volume: data
+  init:
+    mount: /docker-entrypoint-initdb.d
+    env:
+    - name: MONGO_INITDB_DATABASE
+      value: '{{database.db.name}}'
+  extensions:
+  - tar.gz
+  - tgz
+
+backups:
+- name: database
+  title: Default database backup
+  create:
+    args:
+    - bash
+    - -ec
+    - |
+      backup_dir=/data/db/.wodby-backup
+      install -d -m 0700 "$backup_dir"
+      rm -f "$backup_dir/dump.archive.gz" "$backup_dir/restore.sh" "$backup_dir/source-database" /data/db/backup.tar.gz
+      mongodump \
+        --host="$1" \
+        --port=27017 \
+        --username="$MONGO_INITDB_ROOT_USERNAME" \
+        --password="$MONGO_INITDB_ROOT_PASSWORD" \
+        --authenticationDatabase=admin \
+        --db="$2" \
+        --archive="$backup_dir/dump.archive.gz" \
+        --gzip
+      printf '%s' "$2" > "$backup_dir/source-database"
+      cat > "$backup_dir/restore.sh" <<'EOF'
+      #!/usr/bin/env bash
+      set -Eeuo pipefail
+      source_database="$(cat /docker-entrypoint-initdb.d/source-database)"
+      : "${source_database:?source database is required}"
+      : "${MONGO_INITDB_DATABASE:?target database is required}"
+      mongorestore \
+        --host=127.0.0.1 \
+        --port=27017 \
+        --username="$MONGO_INITDB_ROOT_USERNAME" \
+        --password="$MONGO_INITDB_ROOT_PASSWORD" \
+        --authenticationDatabase=admin \
+        --archive=/docker-entrypoint-initdb.d/dump.archive.gz \
+        --gzip \
+        --nsInclude="${source_database}.*" \
+        --nsFrom="${source_database}.*" \
+        --nsTo="${MONGO_INITDB_DATABASE}.*" \
+        --drop
+      EOF
+      chmod 0700 "$backup_dir/restore.sh"
+      tar -C "$backup_dir" -czf /data/db/backup.tar.gz restore.sh source-database dump.archive.gz
+      rm -f "$backup_dir/dump.archive.gz" "$backup_dir/restore.sh" "$backup_dir/source-database"
+    - wodby-backup
+    - '{{database.host}}'
+    - '{{database.db.name}}'
+  upload:
+    filepath: /data/db/backup.tar.gz
+    extension: tar.gz
+
+tokens:
+- name: root_password
+  generate:
+    regex: '[0-9a-z-]{32}'
+- name: password
+  generate:
+    regex: '[0-9a-z-]{32}'
 
 helm:
-  name: bitnami
-  source: oci://registry-1.docker.io/bitnamicharts/mongodb
-  chart: oci://registry-1.docker.io/bitnamicharts/mongodb
-  version: 15.6.25
-  configurations:
-  - container: mongodb
+  name: wodby
+  source: oci://registry-1.docker.io/wodby/stateful
+  chart: oci://registry-1.docker.io/wodby/stateful
+  version: 0.2.0
+  valueMappings:
+    replicas: replicaCount
+    serviceAccountName: serviceAccount.name
+    serviceAccountCreate: serviceAccount.create
+  values:
+  - name: containerName
+    value: mongodb
+  - name: containerPorts
+    value:
+    - name: mongodb
+      containerPort: 27017
+      protocol: TCP
+  - name: persistence.mountPath
+    value: /data/db
+  - name: startupProbe
+    value:
+      tcpSocket:
+        port: mongodb
+      periodSeconds: 2
+      timeoutSeconds: 1
+      failureThreshold: 60
+  - name: livenessProbe
+    value:
+      tcpSocket:
+        port: mongodb
+      periodSeconds: 10
+      timeoutSeconds: 2
+      failureThreshold: 6
+  - name: readinessProbe
+    value:
+      tcpSocket:
+        port: mongodb
+      periodSeconds: 5
+      timeoutSeconds: 1
+      failureThreshold: 3
+
+workloads:
+- name: main
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: '{{helm.release}}'
+  kind: statefulset
+  primary: true
+  helm:
     labels: commonLabels
     annotations: commonAnnotations
-    env: extraEnvVars
-    resources: resources
-  values:
-  - name: auth.rootPassword
-    value: '{{password}}'
-  - name: resourcesPreset
-    value: 'none'
-  - name: architecture
-    value: 'standalone'
-  - name: persistence.enabled    
-    value: false
+    volumes: extraVolumes
+  containers:
+  - name: mongodb
+    image: library/mongo
+    env:
+    - name: MONGO_INITDB_ROOT_USERNAME
+      value: root
+    - name: MONGO_INITDB_ROOT_PASSWORD
+      value: '{{root_password}}'
+      secret: true
+    helm:
+      resources: resources
+      env: envVars
+      mounts: extraVolumeMounts
+      image:
+        registry: image.registry
+        repository: image.repository
+        tag: image.tag
+        pullPolicy: image.pullPolicy
