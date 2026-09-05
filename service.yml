@@ -40,13 +40,12 @@ database:
   kind: mongodb
   port: 27017
   ssl: false
+  charsetSupport: false
   root:
     username: root
     password: '{{root_password}}'
   db:
     name: '{{app.name}}_{{instance.name}}'
-    charset: UTF8
-    collation: simple
     actions:
       create:
         args:
@@ -154,12 +153,6 @@ database:
         - '{{database.host}}'
         - '{{database.user.name}}'
         - '{{database.db.name}}'
-  charsets:
-  - name: UTF8
-    title: UTF-8
-    collation: simple
-    default: true
-
 imports:
 - name: database
   title: Database import
