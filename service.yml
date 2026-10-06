@@ -2,6 +2,7 @@ name: mongodb
 icon: mongodb
 type: db
 title: MongoDB
+guidance: GUIDANCE.md
 
 options:
 - version: '8.0'
