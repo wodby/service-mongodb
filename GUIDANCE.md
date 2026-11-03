@@ -10,6 +10,7 @@ Wodby manages the database and its user; the application does not create them.
 - The user is created in the `admin` database and has the `readWrite` role on the environment's database only. A client therefore authenticates against `admin` (`authSource=admin`), not against the application database. Authenticating against the application database is the usual reason a correct password is refused.
 - Wodby creates the database by creating a collection named `__wodby` in it. Leave that collection in place.
 - The administrator is `root` (`MONGO_INITDB_ROOT_USERNAME`, `MONGO_INITDB_ROOT_PASSWORD` in the container). Its password and the user's password are generated once per environment (tokens `root_password` and `password`).
+- Creating the user is safe to repeat. A user of the same name that accepts the generated password is kept. One with a different password is left unchanged and the creation fails, so a password changed inside MongoDB is never reset.
 
 ## How a linked service reaches it
 

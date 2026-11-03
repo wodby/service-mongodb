@@ -97,7 +97,7 @@ database:
             --username "$MONGO_INITDB_ROOT_USERNAME" \
             --password "$MONGO_INITDB_ROOT_PASSWORD" \
             --authenticationDatabase admin \
-            --eval 'const admin = db.getSiblingDB("admin"); const name = process.env.WODBY_DATABASE_USER_NAME; const password = process.env.WODBY_DATABASE_USER_PASSWORD; if (admin.getUser(name)) { admin.updateUser(name, {pwd: password}); } else { admin.createUser({user: name, pwd: password, roles: []}); }'
+            --eval 'const admin = db.getSiblingDB("admin"); const name = process.env.WODBY_DATABASE_USER_NAME; const password = process.env.WODBY_DATABASE_USER_PASSWORD; if (!admin.getUser(name)) { admin.createUser({user: name, pwd: password, roles: []}); } else { try { admin.auth(name, password); } catch (error) { throw new Error(`MongoDB user ${name} already exists with different credentials`); } }'
         - wodby-create-user
         - '{{database.host}}'
         - '{{database.user.name}}'
