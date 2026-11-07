@@ -280,6 +280,10 @@ workloads:
   containers:
   - name: mongodb
     image: library/mongo
+    resources:
+      request:
+        cpu: 20
+        memory: 112
     env:
     - name: MONGO_INITDB_ROOT_USERNAME
       value: root
