@@ -7,6 +7,7 @@ guidance: GUIDANCE.md
 options:
 - version: '8.0'
   tag: 8.0.38-noble
+  digest: sha256:52afee5c058069f3b4c1517eaf65a8326d9f58ce4ef4fd076043b8eab6905112
   eol: '2029-10-31T00:00:00+00:00'
   default: true
 
